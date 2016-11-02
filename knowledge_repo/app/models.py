@@ -26,6 +26,39 @@ db = SQLAlchemy()
 db_session = LocalProxy(lambda: current_app.db.session)
 
 
+class IndexMetadata(db.Model):
+    __tablename__ = 'index_metadata'
+
+    id = db.Column(db.Integer, nullable=False, primary_key=True)
+    type = db.Column(db.String(255), nullable=False)
+    name = db.Column(db.String(512), nullable=False)
+    value = db.Column(db.String(512), nullable=True)
+    updated_at = db.Column(db.DateTime, default=func.now(), onupdate=func.now())
+
+    @classmethod
+    def get(cls, type, name, default=None):
+        m = db_session.query(IndexMetadata).filter(IndexMetadata.type == type).filter(IndexMetadata.name == name).first()
+        if m is not None:
+            return m.value
+        return default
+
+    @classmethod
+    def set(cls, type, name, value):
+        m = db_session.query(IndexMetadata).filter(IndexMetadata.type == type).filter(IndexMetadata.name == name).first()
+        if m is not None:
+            m.value = value
+        else:
+            m = IndexMetadata(type=type, name=name, value=value)
+            db_session.add(m)
+
+    @classmethod
+    def get_last_update(cls, type, name):
+        m = db_session.query(IndexMetadata).filter(IndexMetadata.type == type).filter(IndexMetadata.name == name).first()
+        if m is not None:
+            return m.updated_at
+        return None
+
+
 class PostAuthorAssoc(db.Model):
     __tablename__ = 'assoc_post_author'
 
