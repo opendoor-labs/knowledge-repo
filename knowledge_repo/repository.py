@@ -156,7 +156,7 @@ class KnowledgeRepository(with_metaclass(SubclassRegisteringABCMeta, object)):
         else:
             prefixes = prefix
         assert all([prefix is None or isinstance(prefix, str) for prefix in prefixes]), "All path prefixes must be strings."
-        prefixes = [prefix if prefix is None else posixpath.relpath(prefix, '/') for prefix in prefixes]
+        prefixes = [prefix if prefix is None else posixpath.relpath(prefix) for prefix in prefixes]
         if isinstance(status, str):
             if status == 'all':
                 status = [self.PostStatus.DRAFT, self.PostStatus.SUBMITTED, self.PostStatus.PUBLISHED, self.PostStatus.UNPUBLISHED]
