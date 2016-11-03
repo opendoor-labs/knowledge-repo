@@ -3,6 +3,7 @@ import os
 import imp
 import logging
 import traceback
+import threading
 
 from flask import Flask, current_app, render_template, g, request
 from flask_mail import Mail
@@ -12,7 +13,7 @@ from alembic.migration import MigrationContext
 
 import knowledge_repo
 from .proxies import db_session, current_repo
-from .index import update_index
+from .index import update_index, update_index_required, human_readable_time_since_index
 from .models import db as sqlalchemy_db, Post, User, Tag
 from . import routes
 
@@ -96,33 +97,12 @@ class KnowledgeFlask(Flask):
                 return render_template('error.html')
 
         @self.before_first_request
-        def update_index_and_typeahead_data():
-            """ Function to call all of the steps we want to run recurrently
-                Ideally, these functions would be in a background job, but
-                running them on each user's first request is a workable
-                solution for now.
-
-                Putting these functions in a function wrapper also helps
-                because before_first_request decorated functions cannot be
-                imported, so this style allows the functions to be used
-                across the app in addition to being run at first.
-            """
-
-            if not current_app.config.get('REPOSITORY_INDEXING_ENABLED', True):
-                return
-
-            update_index()
-
+        def ensure_excluded_tags_exist():
             # For every tag in the excluded tags, create the tag object if it doesn't exist
             excluded_tags = current_app.config.get('EXCLUDED_TAGS', [])
             for tag in excluded_tags:
-                tag_exists = (db_session.query(Tag)
-                                        .filter(Tag.name == tag)
-                                        .all())
-                if not tag_exists:
-                    tag_exists = Tag(name=tag)
-                    db_session.add(tag_exists)
-                    db_session.commit()
+                Tag(name=tag)
+            db_session.commit()
 
         @self.before_request
         def set_user_information():
@@ -134,6 +114,13 @@ class KnowledgeFlask(Flask):
                 g.user = User(username=username)
                 if g.user.id is None:
                     db_session.commit()
+
+        @self.before_request
+        def update_index_if_required():
+            if update_index_required():
+               t = threading.Thread(target=update_index, args=(self,))
+               t.daemon = True
+               t.start()
 
         @self.before_request
         def open_repository_session():
@@ -158,7 +145,7 @@ class KnowledgeFlask(Flask):
             version_revision = None
             if '_' in knowledge_repo.__version__:
                 version, version_revision = version.split('_')
-            return dict(version=version, version_revision=version_revision)
+            return dict(version=version, version_revision=version_revision, last_index=human_readable_time_since_index())
 
     @property
     def repository(self):
