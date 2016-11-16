@@ -15,7 +15,11 @@ logger = logging.getLogger(__name__)
 
 
 def is_indexing():
-    return int(IndexMetadata.get('lock', 'index', '0'))
+    has_lock = IndexMetadata.get('lock', 'index', '0')
+    try:
+        return int(has_lock)
+    except ValueError:  # has_lock is a 'false'/'true' string
+        return {'false': False, 'true': True}.get(has_lock)
 
 
 def time_since_index(human_readable=False):
@@ -35,7 +39,9 @@ def update_index_required():
     seconds = time_since_index()
     seconds_check = time_since_index_check()
 
-    if is_indexing() or (seconds is not None and seconds_check is not None) and (seconds < 5 * 60 or seconds_check < 5 * 60):
+    if (is_indexing() or
+        (seconds is not None and seconds_check is not None) and
+        (seconds < 5 * 60 or seconds_check < 5 * 60)):
         return False
     try:
         for uri, revision in current_repo.revisions.items():
